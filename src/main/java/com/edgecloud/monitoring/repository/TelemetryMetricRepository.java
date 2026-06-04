@@ -9,4 +9,5 @@ import java.util.UUID;
 public interface TelemetryMetricRepository extends JpaRepository<TelemetryMetric, UUID> {
 
     List<TelemetryMetric> findByDeviceIdOrderByRecordedAtDesc(String deviceId);
+    List<TelemetryMetric> findAllByOrderByRecordedAtDesc();
 }

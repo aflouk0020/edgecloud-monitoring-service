@@ -9,4 +9,5 @@ import java.util.UUID;
 public interface ServiceMetricRepository extends JpaRepository<ServiceMetric, UUID> {
 
     List<ServiceMetric> findByServiceIdOrderByRecordedAtDesc(UUID serviceId);
+    List<ServiceMetric> findAllByOrderByRecordedAtDesc();
 }
