@@ -7,6 +7,8 @@ import com.edgecloud.monitoring.exception.DuplicateServiceException;
 import com.edgecloud.monitoring.repository.MonitoredServiceRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class MonitoredServiceServiceImpl implements MonitoredServiceService {
 
@@ -29,12 +31,24 @@ public class MonitoredServiceServiceImpl implements MonitoredServiceService {
 
         MonitoredService saved = repository.save(service);
 
+        return toResponse(saved);
+    }
+
+    @Override
+    public List<MonitoredServiceResponse> getAllServices() {
+        return repository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    private MonitoredServiceResponse toResponse(MonitoredService service) {
         return new MonitoredServiceResponse(
-                saved.getId(),
-                saved.getServiceName(),
-                saved.getServiceUrl(),
-                saved.getStatus(),
-                saved.getCreatedAt()
+                service.getId(),
+                service.getServiceName(),
+                service.getServiceUrl(),
+                service.getStatus(),
+                service.getCreatedAt()
         );
     }
 }
