@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -17,31 +18,36 @@ public class HealthCheckServiceImpl implements HealthCheckService {
 
     private final MonitoredServiceRepository monitoredServiceRepository;
     private final ServiceMetricRepository serviceMetricRepository;
+    private final DowntimeTrackingService downtimeTrackingService;
     private final RestTemplate restTemplate;
 
     public HealthCheckServiceImpl(
             MonitoredServiceRepository monitoredServiceRepository,
             ServiceMetricRepository serviceMetricRepository,
+            DowntimeTrackingService downtimeTrackingService,
             RestTemplate restTemplate) {
         this.monitoredServiceRepository = monitoredServiceRepository;
         this.serviceMetricRepository = serviceMetricRepository;
+        this.downtimeTrackingService = downtimeTrackingService;
         this.restTemplate = restTemplate;
     }
 
     @Override
     public List<MonitoredServiceResponse> checkAllServices() {
-        List<MonitoredService> services = monitoredServiceRepository.findAll();
-
-        return services.stream()
+        return monitoredServiceRepository.findAll()
+                .stream()
                 .map(this::checkService)
                 .toList();
     }
 
     private MonitoredServiceResponse checkService(MonitoredService service) {
+        String previousStatus = service.getStatus();
         long startTime = System.currentTimeMillis();
 
         ServiceMetric metric = new ServiceMetric();
         metric.setServiceId(service.getId());
+
+        UptimeStatus currentStatus;
 
         try {
             ResponseEntity<String> response = restTemplate.getForEntity(
@@ -49,26 +55,30 @@ public class HealthCheckServiceImpl implements HealthCheckService {
                     String.class
             );
 
-            long responseTime = System.currentTimeMillis() - startTime;
-
-            metric.setResponseTimeMs(responseTime);
+            metric.setResponseTimeMs(System.currentTimeMillis() - startTime);
             metric.setStatusCode(response.getStatusCode().value());
-            metric.setUptimeStatus(UptimeStatus.UP);
-
-            service.setStatus("UP");
+            currentStatus = UptimeStatus.UP;
 
         } catch (Exception ex) {
-            long responseTime = System.currentTimeMillis() - startTime;
-
-            metric.setResponseTimeMs(responseTime);
+            metric.setResponseTimeMs(System.currentTimeMillis() - startTime);
             metric.setStatusCode(0);
-            metric.setUptimeStatus(UptimeStatus.DOWN);
-
-            service.setStatus("DOWN");
+            currentStatus = UptimeStatus.DOWN;
         }
+
+        LocalDateTime checkedAt = LocalDateTime.now();
+
+        metric.setUptimeStatus(currentStatus);
+        service.setStatus(currentStatus.name());
 
         serviceMetricRepository.save(metric);
         monitoredServiceRepository.save(service);
+
+        downtimeTrackingService.recordStatusTransition(
+                service.getId(),
+                previousStatus,
+                currentStatus,
+                checkedAt
+        );
 
         return new MonitoredServiceResponse(
                 service.getId(),
